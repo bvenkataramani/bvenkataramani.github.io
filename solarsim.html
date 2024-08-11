@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar System Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Raleway', sans-serif;
+            background-color: #0e0e0e;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .slider-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+        }
+        .slider {
+            width: 100%;
+        }
+        .info-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #888;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            z-index: 10;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            font-weight: bold;
+            font-family: 'Arial', sans-serif;
+        }
+        .info-button:before {
+            content: "i";
+            color: #0e0e0e;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .info-button:hover {
+            background-color: #aaa;
+        }
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #222;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 300px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            z-index: 20;
+            display: none;
+        }
+        .popup h2 {
+            margin-top: 0;
+        }
+        .popup button {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .popup button:hover {
+            background-color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="tooltip" id="tooltip"></div>
+    <div class="slider-container">
+        <input type="range" min="0.001" max="1.0" value="0.1" step="0.001" class="slider" id="speedSlider">
+    </div>
+    <button class="info-button" onclick="togglePopup()"></button>
+    <div class="popup" id="infoPopup">
+        <h2>How to Use the Simulation</h2>
+        <p>
+            Hover over a planet to see more information about it. The simulation will pause while you hover.
+            <br><br>
+            Adjust the slider to make the simulation slower or faster.
+        </p>
+        <button onclick="togglePopup()">Close</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script>
+        let planets = [];
+        let asteroidBelt = [];
+        let G = 0.1; // Gravitational constant, lowered for stability
+        let timeStep = 0.1; // Initial time step for orbit speed
+        let daysElapsed = 0; // Counter for days elapsed
+        let paused = false; // Flag to pause the animation
+        let sunDiameter; // Diameter of the Sun
+        let sunPosition; // Position of the Sun
+
+        // Scaling factor to fit the orbits within the canvas
+        let scaleFactor = 0.5;
+
+        // Define sun properties
+        let sunMass = 10000;
+        let baseSunDiameter = 150; // Original sun diameter
+
+        // Planet data with actual diameters in km
+        let planetData = [
+            { name: 'Mercury', actualDiameter: 4879, diameter: 10 * 0.38, distance: 100, color: '#FF6347', orbitalPeriod: 88 },
+            { name: 'Venus', actualDiameter: 12104, diameter: 10 * 0.95, distance: 150, color: '#4682B4', orbitalPeriod: 225 },
+            { name: 'Earth', actualDiameter: 12742, diameter: 10 * 1, distance: 200, color: '#32CD32', orbitalPeriod: 365.25 },
+            { name: 'Mars', actualDiameter: 6779, diameter: 10 * 0.53, distance: 250, color: '#FFD700', orbitalPeriod: 687 },
+            { name: 'Jupiter', actualDiameter: 139820, diameter: 10 * 11.21, distance: 300, color: '#FFA500', orbitalPeriod: 4333 },
+            { name: 'Saturn', actualDiameter: 116460, diameter: 10 * 9.45, distance: 350, color: '#4B0082', orbitalPeriod: 10759 },
+            { name: 'Uranus', actualDiameter: 50724, diameter: 10 * 4.01, distance: 400, color: '#FF1493', orbitalPeriod: 30687 },
+            { name: 'Neptune', actualDiameter: 49244, diameter: 10 * 3.88, distance: 450, color: '#1E90FF', orbitalPeriod: 60190 }
+        ];
+
+        let asteroidBeltDistance = 275; // Approximate distance for the asteroid belt
+        let asteroidCount = 100; // Number of asteroids to simulate
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            sunPosition = createVector(width / 2, height / 2);
+            sunDiameter = baseSunDiameter * scaleFactor; // Scaled sun diameter
+
+            for (let data of planetData) {
+                // Scale planet distances and diameters
+                let scaledDistance = data.distance * scaleFactor;
+                let scaledDiameter = data.diameter * scaleFactor;
+
+                let position = sunPosition.copy().add(scaledDistance, 0);
+                let planet = new Planet(data.name, scaledDiameter, scaledDistance, sunMass, position, data.color, data.actualDiameter, data.orbitalPeriod);
+                planet.calculateInitialVelocity(sunPosition);
+                planets.push(planet);
+            }
+
+            // Generate asteroids for the asteroid belt
+            for (let i = 0; i < asteroidCount; i++) {
+                let offsetDistance = asteroidBeltDistance * scaleFactor + random(-10, 10);
+                let angle = random(TWO_PI);
+                let x = sunPosition.x + offsetDistance * cos(angle);
+                let y = sunPosition.y + offsetDistance * sin(angle);
+                let asteroid = new Asteroid(createVector(x, y), sunMass, offsetDistance, angle);
+                asteroidBelt.push(asteroid);
+            }
+
+            // Connect the slider to the timeStep
+            let slider = document.getElementById('speedSlider');
+            slider.addEventListener('input', function() {
+                timeStep = parseFloat(slider.value);
+            });
+        }
+
+        function draw() {
+            if (!paused) {
+                daysElapsed += timeStep; // Global time increment based on timeStep
+            }
+
+            background(20);
+            drawSun(); // Draw the sun at the center
+
+            let isAnyPlanetHovered = false; // Track if any planet is hovered
+
+            for (let asteroid of asteroidBelt) {
+                if (!paused) {
+                    asteroid.update();
+                }
+                asteroid.display();
+            }
+
+            for (let planet of planets) {
+                if (!paused) {
+                    planet.update();
+                }
+                planet.displayTail(); // Draw the tail behind the planet
+                planet.display(); // Draw the planet above the tail
+            }
+
+            for (let planet of planets) {
+                // Check if the tooltip should be active
+                if (planet.isHovered()) {
+                    planet.showTooltip();
+                    isAnyPlanetHovered = true;
+                    paused = true; // Pause the animation
+                }
+            }
+
+            // If no planet is hovered, hide the tooltip and resume animation
+            if (!isAnyPlanetHovered) {
+                document.getElementById('tooltip').style.opacity = 0;
+                paused = false; // Resume the animation
+            }
+        }
+
+        function drawSun() {
+            noStroke();
+            fill('#FFFF00');
+            ellipse(sunPosition.x, sunPosition.y, sunDiameter); // Draw the sun with the scaled diameter
+        }
+
+        function togglePopup() {
+            const popup = document.getElementById('infoPopup');
+            popup.style.display = popup.style.display === 'none' || popup.style.display === '' ? 'block' : 'none';
+        }
+
+        class Planet {
+            constructor(name, diameter, distanceFromSun, sunMass, position, color, actualDiameter, orbitalPeriod) {
+                this.name = name;
+                this.diameter = diameter;
+                this.distanceFromSun = distanceFromSun;
+                this.mass = 1; // Arbitrary planet mass
+                this.position = position;
+                this.velocity = createVector(0, 0);
+                this.acceleration = createVector(0, 0);
+                this.color = color;
+                this.sunMass = sunMass;
+                this.angle = 0; // Angle to track position in orbit
+                this.angularVelocity = TWO_PI / orbitalPeriod; // Orbit speed (radians per day)
+                this.actualDiameter = actualDiameter; // Actual planet diameter in km
+            }
+
+            calculateInitialVelocity(sunPosition) {
+                this.angle = atan2(this.position.y - sunPosition.y, this.position.x - sunPosition.x);
+            }
+
+            update() {
+                this.angle += this.angularVelocity * timeStep; // Update angle based on global timeStep
+                this.position.x = sunPosition.x + this.distanceFromSun * cos(this.angle);
+                this.position.y = sunPosition.y + this.distanceFromSun * sin(this.angle);
+            }
+
+            displayTail() {
+                stroke(this.color);
+                noFill();
+                let tailLength = radians(20); // The length of the tail (in radians)
+                let startAngle = this.angle - tailLength;
+                let endAngle = this.angle;
+                arc(sunPosition.x, sunPosition.y, this.distanceFromSun * 2, this.distanceFromSun * 2, startAngle, endAngle);
+            }
+
+            display() {
+                noStroke();
+                fill(this.color);
+                ellipse(this.position.x, this.position.y, this.diameter);
+            }
+
+            isHovered() {
+                return dist(mouseX, mouseY, this.position.x, this.position.y) < this.diameter / 2;
+            }
+
+            showTooltip() {
+                let content = `<strong>${this.name}</strong><br>Diameter: ${this.actualDiameter} km<br>Days Elapsed: ${daysElapsed.toFixed(0)}`;
+                showTooltip(content);
+            }
+        }
+
+        class Asteroid {
+            constructor(position, sunMass, distanceFromSun, initialAngle) {
+                this.position = position;
+                this.angle = initialAngle;
+                this.distanceFromSun = distanceFromSun;
+                this.angularVelocity = sqrt((G * sunMass) / sq(this.distanceFromSun));
+            }
+
+            update() {
+                this.angle += this.angularVelocity * timeStep;
+                this.position.x = sunPosition.x + this.distanceFromSun * cos(this.angle);
+                this.position.y = sunPosition.y + this.distanceFromSun * sin(this.angle);
+            }
+
+            display() {
+                noStroke();
+                fill('#808080');
+                ellipse(this.position.x, this.position.y, 2, 2);
+            }
+        }
+
+        function showTooltip(content) {
+            let tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = content;
+            tooltip.style.left = `${mouseX + 15}px`;
+            tooltip.style.top = `${mouseY + 15}px`;
+            tooltip.style.opacity = 1;
+        }
+    </script>
+</body>
+</html>
