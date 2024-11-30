@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Braid Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #fdfdfd;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            color: #333;
+        }
+        #canvasContainer {
+            position: relative;
+            margin: 20px auto;
+            width: 600px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        canvas {
+            touch-action: none;
+            background-color: #fff;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px auto;
+            flex-wrap: wrap;
+            max-width: 600px;
+        }
+        #controls button, #controls input[type=range] {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 14px;
+            border: none;
+            background-color: #007BFF;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        #controls button:hover, #controls input[type=range]:hover {
+            background-color: #0056b3;
+        }
+        #controls label {
+            margin: 5px;
+            font-size: 14px;
+        }
+        #compressionLabel {
+            margin-left: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="canvasContainer">
+    <canvas id="braidCanvas" width="600" height="800"></canvas>
+</div>
+<div id="controls">
+    <button id="addLevelButton">Add Level</button>
+    <label for="compressionSlider">Compression:</label>
+    <input type="range" id="compressionSlider" min="0" max="1" step="0.01" value="0">
+    <span id="compressionLabel">0%</span>
+    <button id="saveImageButton">Save Image</button>
+    <button id="resetButton">Reset</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('braidCanvas');
+    const ctx = canvas.getContext('2d');
+    const addLevelButton = document.getElementById('addLevelButton');
+    const resetButton = document.getElementById('resetButton');
+    const compressionSlider = document.getElementById('compressionSlider');
+    const compressionLabel = document.getElementById('compressionLabel');
+    const saveImageButton = document.getElementById('saveImageButton');
+
+    let levels = [];
+    const pegsPerLevel = 3;
+    const pegRadius = 6;
+    const originalPegSpacingX = canvas.width / (pegsPerLevel + 1);
+    let pegSpacingX = originalPegSpacingX;
+    const pegSpacingY = 80;
+    let lines = [];
+    let crossings = [];
+    let draggingLine = null;
+    const colors = ['#007BFF', '#28A745', '#DC3545', '#FFC107', '#17A2B8', '#6C757D', '#6610f2'];
+    let pathCount = 0;
+    let compressionFactor = 0;
+
+    // Initialize with top and bottom levels
+    function initialize() {
+        levels = [];
+        lines = [];
+        crossings = [];
+        pathCount = 0;
+
+        // Reset compression
+        compressionFactor = 0;
+        compressionSlider.value = 0;
+        compressionLabel.textContent = '0%';
+        pegSpacingX = originalPegSpacingX;
+
+        addLevel(true);  // Top level
+        addLevel();      // First middle level
+        addLevel(true);  // Bottom level
+        assignPathsToTopPegs();
+        draw();
+    }
+
+    // Assign initial paths and colors to top pegs
+    function assignPathsToTopPegs() {
+        const topLevel = levels[0];
+        topLevel.forEach((peg, index) => {
+            peg.pathId = index;
+            peg.color = colors[index % colors.length];
+            pathCount++;
+        });
+    }
+
+    // Add a level
+    function addLevel(isFixed = false) {
+        const y = levels.length * pegSpacingY + pegSpacingY;
+        const pegs = [];
+        for (let i = 0; i < pegsPerLevel; i++) {
+            pegs.push({
+                x: 0, // Will be set in adjustPegPositions()
+                y: y,
+                levelIndex: levels.length,
+                pegIndex: i,
+                isFixed: isFixed,
+                pathId: null,
+                color: null
+            });
+        }
+        levels.push(pegs);
+        resizeCanvas();
+        draw();
+    }
+
+    // Resize canvas height based on levels
+    function resizeCanvas() {
+        canvas.height = (levels.length + 1) * pegSpacingY;
+    }
+
+    // Draw the pegs and lines
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        adjustPegPositions();
+        detectCrossings();
+        drawLines();
+        drawCrossings();
+        drawPegs();
+    }
+
+    // Adjust peg positions based on compression
+    function adjustPegPositions() {
+        const totalWidth = canvas.width;
+        const compressedSpacing = originalPegSpacingX * (1 - compressionFactor);
+
+        const centerX = totalWidth / 2;
+        const totalPegWidth = (pegsPerLevel - 1) * compressedSpacing;
+        const startX = centerX - totalPegWidth / 2;
+
+        levels.forEach(level => {
+            level.forEach((peg, index) => {
+                peg.x = startX + index * compressedSpacing;
+            });
+        });
+    }
+
+    // Draw pegs
+    function drawPegs() {
+        levels.forEach(level => {
+            level.forEach(peg => {
+                ctx.beginPath();
+                ctx.arc(peg.x, peg.y, pegRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = peg.color ? peg.color : '#333';
+                ctx.fill();
+            });
+        });
+    }
+
+    // Draw lines
+    function drawLines() {
+        lines.forEach(line => {
+            ctx.beginPath();
+            ctx.moveTo(line.startPeg.x, line.startPeg.y);
+
+            // Draw a curve instead of a straight line
+            const controlY = (line.startPeg.y + line.endPeg.y) / 2;
+            ctx.bezierCurveTo(
+                line.startPeg.x, controlY,
+                line.endPeg.x, controlY,
+                line.endPeg.x, line.endPeg.y
+            );
+
+            ctx.strokeStyle = line.color;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        });
+
+        if (draggingLine) {
+            ctx.beginPath();
+            ctx.moveTo(draggingLine.startPeg.x, draggingLine.startPeg.y);
+
+            // Draw a curve while dragging
+            const controlY = (draggingLine.startPeg.y + draggingLine.currentY) / 2;
+            ctx.bezierCurveTo(
+                draggingLine.startPeg.x, controlY,
+                draggingLine.currentX, controlY,
+                draggingLine.currentX, draggingLine.currentY
+            );
+
+            ctx.strokeStyle = draggingLine.startPeg.color;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+    }
+
+    // Draw crossings with over/under
+    function drawCrossings() {
+        crossings.forEach(crossing => {
+            const { overLine, underLine, intersection } = crossing;
+
+            // Redraw the underLine underneath
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.strokeStyle = underLine.color;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(underLine.startPeg.x, underLine.startPeg.y);
+            const controlY1 = (underLine.startPeg.y + underLine.endPeg.y) / 2;
+            ctx.bezierCurveTo(
+                underLine.startPeg.x, controlY1,
+                underLine.endPeg.x, controlY1,
+                underLine.endPeg.x, underLine.endPeg.y
+            );
+            ctx.stroke();
+            ctx.restore();
+
+            // Erase the overLine at the crossing area
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            ctx.arc(intersection.x, intersection.y, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
+
+            // Redraw the overLine on top
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = overLine.color;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(overLine.startPeg.x, overLine.startPeg.y);
+            const controlY2 = (overLine.startPeg.y + overLine.endPeg.y) / 2;
+            ctx.bezierCurveTo(
+                overLine.startPeg.x, controlY2,
+                overLine.endPeg.x, controlY2,
+                overLine.endPeg.x, overLine.endPeg.y
+            );
+            ctx.stroke();
+            ctx.restore();
+        });
+    }
+
+    // Get peg at position
+    function getPegAtPosition(x, y) {
+        for (let level of levels) {
+            for (let peg of level) {
+                const dx = peg.x - x;
+                const dy = peg.y - y;
+                if (Math.sqrt(dx * dx + dy * dy) <= pegRadius * 2) {
+                    return peg;
+                }
+            }
+        }
+        return null;
+    }
+
+    // Mouse events
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Check for clicking on a crossing first
+        const crossing = getCrossingAtPosition(mouseX, mouseY);
+        if (crossing) {
+            swapOverUnder(crossing);
+            draw();
+            return;
+        }
+
+        const peg = getPegAtPosition(mouseX, mouseY);
+        if (peg) {
+            draggingLine = {
+                startPeg: peg,
+                currentX: mouseX,
+                currentY: mouseY
+            };
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggingLine) {
+            const rect = canvas.getBoundingClientRect();
+            draggingLine.currentX = e.clientX - rect.left;
+            draggingLine.currentY = e.clientY - rect.top;
+            draw();
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (draggingLine) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const endPeg = getPegAtPosition(mouseX, mouseY);
+
+            if (endPeg && endPeg !== draggingLine.startPeg) {
+                const existingLineIndex = findLineIndex(draggingLine.startPeg, endPeg);
+
+                if (existingLineIndex !== -1) {
+                    // Line exists, remove it
+                    lines.splice(existingLineIndex, 1);
+                    recalculatePaths();
+                    draggingLine = null;
+                    draw();
+                    return;
+                } else {
+                    // Apply constraints for adding new lines
+                    // Prevent drawing between pegs on the same level
+                    if (draggingLine.startPeg.levelIndex === endPeg.levelIndex) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Only allow drawing to the next level below
+                    if (endPeg.levelIndex !== draggingLine.startPeg.levelIndex + 1) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Prevent multiple lines from the same peg to the next level
+                    const existingLineFromStartPeg = lines.find(line =>
+                        line.startPeg === draggingLine.startPeg && line.startPeg.levelIndex === draggingLine.startPeg.levelIndex
+                    );
+                    const existingLineToEndPeg = lines.find(line =>
+                        line.endPeg === endPeg && line.endPeg.levelIndex === endPeg.levelIndex
+                    );
+                    if (existingLineFromStartPeg || existingLineToEndPeg) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Add new line
+                    const newLine = {
+                        startPeg: draggingLine.startPeg,
+                        endPeg: endPeg,
+                        color: draggingLine.startPeg.color,
+                        overUnder: 'over' // Default over
+                    };
+                    lines.push(newLine);
+                    recalculatePaths();
+                }
+            }
+            draggingLine = null;
+            draw();
+        }
+    });
+
+    // Touch events for mobile support
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = touch.clientX - rect.left;
+        const mouseY = touch.clientY - rect.top;
+
+        // Check for clicking on a crossing first
+        const crossing = getCrossingAtPosition(mouseX, mouseY);
+        if (crossing) {
+            swapOverUnder(crossing);
+            draw();
+            return;
+        }
+
+        const peg = getPegAtPosition(mouseX, mouseY);
+        if (peg) {
+            draggingLine = {
+                startPeg: peg,
+                currentX: mouseX,
+                currentY: mouseY
+            };
+        }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (draggingLine) {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            draggingLine.currentX = touch.clientX - rect.left;
+            draggingLine.currentY = touch.clientY - rect.top;
+            draw();
+        }
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+        if (draggingLine) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = draggingLine.currentX;
+            const mouseY = draggingLine.currentY;
+            const endPeg = getPegAtPosition(mouseX, mouseY);
+
+            if (endPeg && endPeg !== draggingLine.startPeg) {
+                const existingLineIndex = findLineIndex(draggingLine.startPeg, endPeg);
+
+                if (existingLineIndex !== -1) {
+                    // Line exists, remove it
+                    lines.splice(existingLineIndex, 1);
+                    recalculatePaths();
+                    draggingLine = null;
+                    draw();
+                    return;
+                } else {
+                    // Apply constraints for adding new lines
+                    // Prevent drawing between pegs on the same level
+                    if (draggingLine.startPeg.levelIndex === endPeg.levelIndex) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Only allow drawing to the next level below
+                    if (endPeg.levelIndex !== draggingLine.startPeg.levelIndex + 1) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Prevent multiple lines from the same peg to the next level
+                    const existingLineFromStartPeg = lines.find(line =>
+                        line.startPeg === draggingLine.startPeg && line.startPeg.levelIndex === draggingLine.startPeg.levelIndex
+                    );
+                    const existingLineToEndPeg = lines.find(line =>
+                        line.endPeg === endPeg && line.endPeg.levelIndex === endPeg.levelIndex
+                    );
+                    if (existingLineFromStartPeg || existingLineToEndPeg) {
+                        draggingLine = null;
+                        draw();
+                        return;
+                    }
+
+                    // Add new line
+                    const newLine = {
+                        startPeg: draggingLine.startPeg,
+                        endPeg: endPeg,
+                        color: draggingLine.startPeg.color,
+                        overUnder: 'over' // Default over
+                    };
+                    lines.push(newLine);
+                    recalculatePaths();
+                }
+            }
+            draggingLine = null;
+            draw();
+        }
+    });
+
+    // Control buttons
+    addLevelButton.addEventListener('click', () => {
+        addLevel();
+    });
+
+    resetButton.addEventListener('click', () => {
+        initialize();
+    });
+
+    compressionSlider.addEventListener('input', () => {
+        compressionFactor = parseFloat(compressionSlider.value);
+        const percentage = Math.round(compressionFactor * 100);
+        compressionLabel.textContent = `${percentage}%`;
+        draw();
+    });
+
+    // Save Image button
+    saveImageButton.addEventListener('click', () => {
+        saveImage();
+    });
+
+    // Initialize the braid visualizer
+    initialize();
+
+    // Function to find the index of a line between two pegs
+    function findLineIndex(peg1, peg2) {
+        return lines.findIndex(line =>
+            (line.startPeg === peg1 && line.endPeg === peg2) ||
+            (line.startPeg === peg2 && line.endPeg === peg1)
+        );
+    }
+
+    // Recalculate paths after adding or removing a line
+    function recalculatePaths() {
+        // Reset pathIds and colors for all pegs and lines
+        levels.forEach(level => {
+            level.forEach(peg => {
+                peg.pathId = null;
+                peg.color = null;
+            });
+        });
+        lines.forEach(line => {
+            line.color = null;
+        });
+
+        // Assign new pathIds and colors starting from top-level pegs
+        pathCount = 0;
+        assignPathsToTopPegs();
+        const visitedPegs = new Set();
+
+        levels[0].forEach(topPeg => {
+            traversePath(topPeg, topPeg.pathId, topPeg.color, visitedPegs);
+        });
+    }
+
+    // Traverse the connected pegs and lines to assign pathIds and colors
+    function traversePath(peg, pathId, color, visitedPegs) {
+        if (visitedPegs.has(peg)) return;
+        visitedPegs.add(peg);
+        peg.pathId = pathId;
+        peg.color = color;
+
+        lines.forEach(line => {
+            if (line.startPeg === peg) {
+                const otherPeg = line.endPeg;
+                if (!visitedPegs.has(otherPeg)) {
+                    line.color = color;
+                    traversePath(otherPeg, pathId, color, visitedPegs);
+                }
+            } else if (line.endPeg === peg) {
+                const otherPeg = line.startPeg;
+                if (!visitedPegs.has(otherPeg)) {
+                    line.color = color;
+                    traversePath(otherPeg, pathId, color, visitedPegs);
+                }
+            }
+        });
+    }
+
+    // Detect crossings between lines
+    function detectCrossings() {
+        crossings = [];
+        for (let i = 0; i < lines.length; i++) {
+            for (let j = i + 1; j < lines.length; j++) {
+                const line1 = lines[i];
+                const line2 = lines[j];
+
+                // Skip if lines belong to the same path or are on the same level
+                if (line1.startPeg.pathId === line2.startPeg.pathId) continue;
+                if (line1.startPeg.levelIndex === line1.endPeg.levelIndex || line2.startPeg.levelIndex === line2.endPeg.levelIndex) continue;
+
+                const intersection = getLineIntersection(
+                    line1.startPeg.x, line1.startPeg.y, line1.endPeg.x, line1.endPeg.y,
+                    line2.startPeg.x, line2.startPeg.y, line2.endPeg.x, line2.endPeg.y
+                );
+                if (intersection) {
+                    crossings.push({
+                        intersection: intersection,
+                        overLine: line1,
+                        underLine: line2
+                    });
+                }
+            }
+        }
+    }
+
+    // Get crossing at position
+    function getCrossingAtPosition(x, y) {
+        for (let crossing of crossings) {
+            const dx = crossing.intersection.x - x;
+            const dy = crossing.intersection.y - y;
+            if (Math.sqrt(dx * dx + dy * dy) <= 10) {
+                return crossing;
+            }
+        }
+        return null;
+    }
+
+    // Swap over/under lines at a crossing
+    function swapOverUnder(crossing) {
+        const temp = crossing.overLine;
+        crossing.overLine = crossing.underLine;
+        crossing.underLine = temp;
+    }
+
+    // Function to find intersection point between two lines
+    function getLineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
+        const denom = (y4 - y3)*(x2 - x1) - (x4 - x3)*(y2 - y1);
+        if (denom === 0) return null; // Lines are parallel
+
+        const ua = ((x4 - x3)*(y1 - y3) - (y4 - y3)*(x1 - x3)) / denom;
+        const ub = ((x2 - x1)*(y1 - y3) - (y2 - y1)*(x1 - x3)) / denom;
+
+        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+            const x = x1 + ua * (x2 - x1);
+            const y = y1 + ua * (y2 - y1);
+            return { x, y };
+        }
+        return null;
+    }
+
+    // Function to save the canvas as an image
+    function saveImage() {
+        const link = document.createElement('a');
+        link.download = 'braid.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+</script>
+
+</body>
+</html>
