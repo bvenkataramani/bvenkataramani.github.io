@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attention Trainer Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        /* Custom class for smoother transitions */
+        .transition-all-smooth {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 300ms;
+        }
+        /* Ensure canvas takes up available space within its parent */
+        #gameCanvas {
+            display: block; /* Removes extra space below canvas */
+            width: 100%;
+            height: 100%;
+        }
+        /* Style for the message box */
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .message-box.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .message-box-success {
+            background-color: #4CAF50; /* Green */
+            color: white;
+        }
+        .message-box-error {
+            background-color: #f44336; /* Red */
+            color: white;
+        }
+        .message-box-info {
+            background-color: #2196F3; /* Blue */
+            color: white;
+        }
+        .text-red-400 { color: #F87171; } /* Tailwind red-400 */
+        .text-blue-400 { color: #60A5FA; } /* Tailwind blue-400 */
+    </style>
+</head>
+<body class="bg-slate-900 text-white flex items-center justify-center h-screen m-0">
+
+    <div id="gameContainer" class="w-full h-full flex flex-col items-center justify-center relative">
+
+        <div id="welcomeScreen" class="text-center p-8 bg-slate-800 rounded-xl shadow-2xl transition-all-smooth">
+            <h1 class="text-4xl font-bold mb-6 text-sky-400">Attention Trainer</h1>
+            <p class="mb-8 text-slate-300 max-w-md">
+                Focus on the screen. Count the <span class="font-semibold text-red-400">RED</span> and <span class="font-semibold text-blue-400">BLUE</span> balls.
+                Balls appear every 20-40 seconds.
+                The game ends if you move the mouse or press any key (after a 2s grace period).
+                At the end, you'll be asked for the count of ONE of the colors.
+            </p>
+            <button id="playButton" class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 px-8 rounded-lg text-xl shadow-lg transform hover:scale-105 transition-all-smooth">
+                Play
+            </button>
+        </div>
+
+        <div id="gameScreen" class="hidden w-full h-full relative transition-all-smooth">
+            <canvas id="gameCanvas" class="bg-slate-800"></canvas>
+            <div id="stats" class="absolute top-4 left-4 bg-slate-900/70 p-3 rounded-lg shadow">
+                Time: <span id="timer" class="font-semibold">0</span>s
+            </div>
+            </div>
+
+        <div id="gameOverScreen" class="hidden text-center p-8 bg-slate-800 rounded-xl shadow-2xl transition-all-smooth">
+            <h2 class="text-3xl font-bold mb-4 text-sky-400">Game Over!</h2>
+            <p id="gameOverReason" class="text-lg mb-4 text-slate-300">You moved or pressed a key.</p>
+            <p class="text-xl mb-2 text-slate-200">Your time: <span id="finalTime" class="font-semibold text-yellow-400">0</span>s</p>
+            <div class="my-6">
+                <label for="ballCountInput" id="ballCountInputLabel" class="block mb-2 text-lg text-slate-200">How many balls did you see?</label>
+                <input type="number" id="ballCountInput" class="bg-slate-700 text-white p-3 rounded-lg text-center text-xl w-32 border border-slate-600 focus:ring-2 focus:ring-sky-500 outline-none" min="0">
+            </div>
+            <button id="submitCountButton" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg text-lg shadow-lg transform hover:scale-105 transition-all-smooth mb-4">
+                Submit Count
+            </button>
+            <div id="resultMessage" class="mt-4 text-lg text-slate-300 min-h-[2em]"></div>
+            <button id="restartButton" class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 px-8 rounded-lg text-lg shadow-lg transform hover:scale-105 transition-all-smooth mt-4 hidden">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <div id="messageBox" class="message-box"></div>
+
+    <script>
+        // DOM Elements
+        const gameContainer = document.getElementById('gameContainer');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const playButton = document.getElementById('playButton');
+        const restartButton = document.getElementById('restartButton');
+        const submitCountButton = document.getElementById('submitCountButton');
+        
+        const timerDisplay = document.getElementById('timer');
+        const finalTimeDisplay = document.getElementById('finalTime');
+        const ballCountInput = document.getElementById('ballCountInput');
+        const ballCountInputLabel = document.getElementById('ballCountInputLabel'); 
+        const resultMessage = document.getElementById('resultMessage');
+        const gameOverReasonDisplay = document.getElementById('gameOverReason');
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game State
+        let isPlaying = false;
+        let startTime;
+        let gameTimerInterval;
+        let ballGenerationTimeout;
+        let balls = [];
+        let actualRedBallCount = 0;
+        let actualBlueBallCount = 0; 
+        let colorToAsk = ''; 
+        let animationFrameId;
+        let gracePeriodTimeout;
+
+        // Game Configuration
+        const BALL_RADIUS = 15;
+        const BALL_COLOR_RED_RGB = 'rgba(239, 68, 68, 0.9)'; 
+        const BALL_COLOR_BLUE_RGB = 'rgba(59, 130, 246, 0.9)';
+        // --- MODIFIED INTERVALS FOR "MORE BORING" GAMEPLAY ---
+        const MIN_BALL_INTERVAL_MS = 20000; // 20 seconds
+        const MAX_BALL_INTERVAL_MS = 40000; // 40 seconds
+        // --- END OF MODIFICATION ---
+        const GRACE_PERIOD_MS = 2000;
+
+        // Message Box Function
+        function showMessage(text, type = 'info', duration = 3000) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = text;
+            messageBox.className = 'message-box';
+            messageBox.classList.add(`message-box-${type}`, 'show');
+            
+            if (messageBox.timeoutId) {
+                clearTimeout(messageBox.timeoutId);
+            }
+            messageBox.timeoutId = setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Canvas Setup
+        function resizeCanvas() {
+            canvas.width = gameScreen.clientWidth;
+            canvas.height = gameScreen.clientHeight;
+        }
+
+        // Ball Object
+        class Ball {
+            constructor(x, y, dx, dy, color, radius) {
+                this.x = x;
+                this.y = y;
+                this.dx = dx;
+                this.dy = dy;
+                this.color = color; 
+                this.radius = radius;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            update() {
+                this.x += this.dx;
+                this.y += this.dy;
+                this.draw();
+            }
+        }
+
+        // Ball Generation
+        function generateBall() {
+            if (!isPlaying) return;
+
+            let ballColorRGB;
+            if (Math.random() < 0.5) {
+                ballColorRGB = BALL_COLOR_RED_RGB;
+                actualRedBallCount++;
+            } else {
+                ballColorRGB = BALL_COLOR_BLUE_RGB;
+                actualBlueBallCount++;
+            }
+
+            let x, y, dx, dy;
+            const speed = (Math.random() * 1.5) + 1; 
+
+            const edge = Math.floor(Math.random() * 4);
+            switch (edge) {
+                case 0: 
+                    x = Math.random() * canvas.width; y = 0 - BALL_RADIUS;
+                    dx = (Math.random() - 0.5) * speed * 2; dy = speed;
+                    break;
+                case 1: 
+                    x = canvas.width + BALL_RADIUS; y = Math.random() * canvas.height;
+                    dx = -speed; dy = (Math.random() - 0.5) * speed * 2;
+                    break;
+                case 2: 
+                    x = Math.random() * canvas.width; y = canvas.height + BALL_RADIUS;
+                    dx = (Math.random() - 0.5) * speed * 2; dy = -speed;
+                    break;
+                case 3: 
+                    x = 0 - BALL_RADIUS; y = Math.random() * canvas.height;
+                    dx = speed; dy = (Math.random() - 0.5) * speed * 2;
+                    break;
+            }
+            balls.push(new Ball(x, y, dx, dy, ballColorRGB, BALL_RADIUS));
+            
+            const nextBallTime = Math.random() * (MAX_BALL_INTERVAL_MS - MIN_BALL_INTERVAL_MS) + MIN_BALL_INTERVAL_MS;
+            ballGenerationTimeout = setTimeout(generateBall, nextBallTime);
+        }
+
+        // Game Loop
+        function gameLoop() {
+            if (!isPlaying) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = balls.length - 1; i >= 0; i--) {
+                balls[i].update();
+                if (balls[i].x < -BALL_RADIUS * 5 || balls[i].x > canvas.width + BALL_RADIUS * 5 ||
+                    balls[i].y < -BALL_RADIUS * 5 || balls[i].y > canvas.height + BALL_RADIUS * 5) {
+                    balls.splice(i, 1);
+                }
+            }
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Timer Update
+        function updateTimer() {
+            const currentTime = Math.floor((Date.now() - startTime) / 1000);
+            timerDisplay.textContent = currentTime;
+        }
+
+        // Fidget Detection
+        function handleFidget(event) {
+            if (isPlaying) {
+                let reason = "You moved the mouse.";
+                if (event.type === 'keydown') {
+                    reason = "You pressed a key.";
+                }
+                endGame(reason);
+            }
+        }
+        
+        // Start Game
+        function startGame() {
+            isPlaying = true;
+            startTime = Date.now();
+            actualRedBallCount = 0;
+            actualBlueBallCount = 0; 
+            balls = [];
+            ballCountInput.value = '';
+            resultMessage.textContent = '';
+            restartButton.classList.add('hidden');
+            submitCountButton.disabled = false;
+
+            resizeCanvas(); 
+
+            welcomeScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            
+            setTimeout(() => {
+                resizeCanvas(); 
+                gameTimerInterval = setInterval(updateTimer, 1000);
+                
+                const firstBallTime = Math.random() * (MAX_BALL_INTERVAL_MS - MIN_BALL_INTERVAL_MS) + MIN_BALL_INTERVAL_MS;
+                ballGenerationTimeout = setTimeout(generateBall, firstBallTime);
+    
+                animationFrameId = requestAnimationFrame(gameLoop);
+                showMessage(`Game Started! ${GRACE_PERIOD_MS / 1000}s grace period...`, 'info', GRACE_PERIOD_MS);
+
+                if (gracePeriodTimeout) {
+                    clearTimeout(gracePeriodTimeout);
+                }
+
+                gracePeriodTimeout = setTimeout(() => {
+                    if (isPlaying) { 
+                        document.addEventListener('mousemove', handleFidget);
+                        document.addEventListener('keydown', handleFidget);
+                        showMessage('Focus active! Do not move.', 'success', 2000); 
+                    }
+                }, GRACE_PERIOD_MS);
+
+            }, 100); 
+        }
+
+        // End Game
+        function endGame(reason = "Game Over") {
+            if (!isPlaying) return; 
+            isPlaying = false;
+
+            cancelAnimationFrame(animationFrameId);
+            clearInterval(gameTimerInterval);
+            clearTimeout(ballGenerationTimeout);
+            clearTimeout(gracePeriodTimeout); 
+
+            document.removeEventListener('mousemove', handleFidget);
+            document.removeEventListener('keydown', handleFidget);
+
+            const finalTime = timerDisplay.textContent;
+            finalTimeDisplay.textContent = finalTime;
+            gameOverReasonDisplay.textContent = reason;
+
+            if (Math.random() < 0.5) {
+                colorToAsk = 'RED';
+                ballCountInputLabel.innerHTML = `How many <span class="font-semibold text-red-400">RED</span> balls did you see?`;
+            } else {
+                colorToAsk = 'BLUE';
+                ballCountInputLabel.innerHTML = `How many <span class="font-semibold text-blue-400">BLUE</span> balls did you see?`;
+            }
+
+            gameScreen.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            if (reason !== "Game Over") {
+                 showMessage(reason, 'error', 3000);
+            }
+        }
+
+        // Submit Count
+        function handleSubmitCount() {
+            const userAnswer = parseInt(ballCountInput.value);
+            if (isNaN(userAnswer)) {
+                resultMessage.textContent = "Please enter a valid number.";
+                resultMessage.classList.remove('text-green-400', 'text-red-400');
+                resultMessage.classList.add('text-yellow-400');
+                return;
+            }
+
+            let correctCount;
+            let colorName;
+
+            if (colorToAsk === 'RED') {
+                correctCount = actualRedBallCount;
+                colorName = 'red';
+            } else {
+                correctCount = actualBlueBallCount;
+                colorName = 'blue';
+            }
+
+            if (userAnswer === correctCount) {
+                resultMessage.textContent = `Correct! You saw ${correctCount} ${colorName} ball(s). Well done!`;
+                resultMessage.classList.remove('text-yellow-400', 'text-red-400');
+                resultMessage.classList.add('text-green-400');
+            } else {
+                resultMessage.textContent = `Not quite. You were asked for ${colorName} balls. You saw ${correctCount}, but answered ${userAnswer}.`;
+                resultMessage.classList.remove('text-yellow-400', 'text-green-400');
+                resultMessage.classList.add('text-red-400');
+            }
+            submitCountButton.disabled = true; 
+            restartButton.classList.remove('hidden');
+        }
+
+        // Event Listeners
+        playButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        submitCountButton.addEventListener('click', handleSubmitCount);
+        window.addEventListener('resize', () => {
+            if (isPlaying) {
+                resizeCanvas(); 
+            }
+        });
+
+        // Initial setup
+        welcomeScreen.classList.remove('hidden');
+        gameScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+    </script>
+</body>
+</html>
