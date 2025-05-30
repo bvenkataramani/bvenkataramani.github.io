@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Normality Maze Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .controls-section {
+            background-color: #f9fafb; /* gray-50 */
+            border-radius: 0.5rem; /* rounded-lg */
+            padding: 1.5rem; /* p-6 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+        }
+        .info-box {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 4px solid #3b82f6; /* blue-500 */
+            padding: 1rem; /* p-4 */
+            margin-bottom: 1rem; /* mb-4 */
+            border-radius: 0.375rem; /* rounded-md */
+        }
+        .status-message {
+            min-height: 24px; /* Ensure space for message */
+        }
+        .mapping-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.5rem;
+        }
+        .mapping-item {
+            background-color: #e0e7ff; /* indigo-100 */
+            padding: 0.5rem;
+            border-radius: 0.375rem; /* rounded-md */
+            font-size: 0.875rem; /* text-sm */
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-5xl mx-auto bg-white p-6 rounded-xl shadow-2xl">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-indigo-600">Pi Normality Maze Test</h1>
+            <p class="text-sm text-gray-600 mt-2">
+                This simulation explores the concept of normality in Pi. A maze is generated, and digits of Pi are mapped to movements (Up, Down, Left, Right, Stay Put).
+                A "player" attempts to navigate the maze using these Pi-driven movements. If Pi is normal, its digits should eventually guide the player to the exit over many trials or with enough digits.
+            </p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-2 flex flex-col items-center">
+                <canvas id="mazeCanvas" width="450" height="450" class="mb-4"></canvas>
+                <div class="w-full max-w-md text-sm space-y-2">
+                    <div class="flex justify-between">
+                        <span class="font-semibold">Current Pi Digit:</span>
+                        <span id="currentPiDigit" class="font-mono text-indigo-700">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-semibold">Action:</span>
+                        <span id="currentAction" class="font-mono text-indigo-700">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-semibold">Digits Processed:</span>
+                        <span id="digitsProcessed" class="font-mono text-indigo-700">0</span>
+                    </div>
+                     <div class="flex justify-between">
+                        <span class="font-semibold">Player Position:</span>
+                        <span id="playerPosition" class="font-mono text-indigo-700">(0,0)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-section space-y-4">
+                <div>
+                    <label for="mazeSize" class="block text-sm font-medium text-gray-700 mb-1">Maze Size (N x N):</label>
+                    <select id="mazeSize" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="10">10x10</option>
+                        <option value="15" selected>15x15</option>
+                        <option value="20">20x20</option>
+                        <option value="25">25x25</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="simulationSpeed" class="block text-sm font-medium text-gray-700 mb-1">Simulation Speed:</label>
+                    <select id="simulationSpeed" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="200">Slow</option>
+                        <option value="100" selected>Medium</option>
+                        <option value="30">Fast</option>
+                        <option value="0">Instant (Careful!)</option>
+                    </select>
+                </div>
+
+                <button id="startButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out">
+                    Start Simulation
+                </button>
+                 <button id="resetButton" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-150 ease-in-out mt-2">
+                    New Maze & Mapping
+                </button>
+
+                <div class="pt-4">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Digit to Action Mapping:</h3>
+                    <div id="mappingDisplay" class="mapping-grid">
+                        </div>
+                </div>
+                <div id="statusMessage" class="status-message mt-4 text-center font-semibold text-lg">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const mazeSizeSelect = document.getElementById('mazeSize');
+        const simulationSpeedSelect = document.getElementById('simulationSpeed');
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+        const mappingDisplay = document.getElementById('mappingDisplay');
+        const currentPiDigitEl = document.getElementById('currentPiDigit');
+        const currentActionEl = document.getElementById('currentAction');
+        const digitsProcessedEl = document.getElementById('digitsProcessed');
+        const playerPositionEl = document.getElementById('playerPosition');
+        const statusMessageEl = document.getElementById('statusMessage');
+
+        // First 2000 digits of Pi after decimal
+        const PI_DIGITS_STR = "14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196442881097566593344612847564823378678316527120190914564856692346034861045432664821339360726024914127372458700660631558817488152092096282925409171536436789259036001133053054882046652138414695194151160943305727036575959195309218611738193261179310511854807446237996274956735188575272489122793818301194912983367336244065664308602139494639522473719070217986094370277053921717629317675238467481846766940513200056812714526356082778577134275778960917363717872146844090122495343014654958537105079227968925892354201995611212902196086403441815981362977477130996051870721134999999837297804995105973173281609631859502445945534690830264252230825334468503526193118817101000313783875288658753320838142061717766914730359825349042875546873115956286388235378759375195778185778053217122680661300192787661119590921642019893809525720106548586327886593615338182796823030195203530185296899577362259941389124972177528347913151557485724245415069595082953311686172785588907509838175463746493931925506040092770167113900984882401285836160356370766010471018194295559619894676783744944825537977472684710404753464620804668425906949129331367702898915210475216205696602405803815019351125338243003558764024749647326391419927260426992279678235478163600934172164121992458631503028618297455570674983850549458858692699569092721079750930295532116534498720275596023648066549911988183479775356636980742654252786255181841757467289097777279380008164706001614524919217321721477235014144197356854816136115735255213347574184946843852332390739414333454776241686251898356948556209921922218427255025425688767179049460165346680498862723279178608578438382796797668145410095388378636095068006422512520511739298489608412848862694560424196528502221066118630674427862203919494504712371378696095636437191728746776465757396241389086583264599581339047802759009946576407895126946839835259570982582262052248940772671947826848260147699090264013639443745530506820349625245174939965143142980919065925093722169646151570985838741059788595977297549893016175392846813826868386894277415599185592524595395943104997252468084598728364884236039614590389826790002884090351";
+        let MAZE_SIZE = parseInt(mazeSizeSelect.value);
+        let CELL_SIZE = canvas.width / MAZE_SIZE;
+        let grid = [];
+        let player = { x: 0, y: 0, path: [] };
+        let piIndex = 0;
+        let actionMapping = {};
+        let simulationInterval;
+        let simulationRunning = false;
+
+        const ACTIONS = { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, STAY_PUT: 4 };
+        const ACTION_NAMES = ["UP", "DOWN", "LEFT", "RIGHT", "STAY_PUT"];
+
+        // --- Maze Generation (DFS) ---
+        function createGrid() {
+            grid = [];
+            for (let r = 0; r < MAZE_SIZE; r++) {
+                grid[r] = [];
+                for (let c = 0; c < MAZE_SIZE; c++) {
+                    grid[r][c] = {
+                        r: r, c: c,
+                        walls: { N: true, S: true, E: true, W: true },
+                        visited: false
+                    };
+                }
+            }
+        }
+
+        function generateMaze() {
+            createGrid();
+            let stack = [];
+            let current = grid[0][0];
+            current.visited = true;
+            stack.push(current);
+
+            while (stack.length > 0) {
+                current = stack.pop();
+                let r = current.r;
+                let c = current.c;
+                let neighbors = [];
+
+                // North
+                if (r > 0 && !grid[r - 1][c].visited) neighbors.push(grid[r - 1][c]);
+                // South
+                if (r < MAZE_SIZE - 1 && !grid[r + 1][c].visited) neighbors.push(grid[r + 1][c]);
+                // East
+                if (c < MAZE_SIZE - 1 && !grid[r][c + 1].visited) neighbors.push(grid[r][c + 1]);
+                // West
+                if (c > 0 && !grid[r][c - 1].visited) neighbors.push(grid[r][c - 1]);
+
+                if (neighbors.length > 0) {
+                    stack.push(current);
+                    let chosen = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+                    // Remove walls
+                    if (chosen.r < r) { // North
+                        current.walls.N = false;
+                        chosen.walls.S = false;
+                    } else if (chosen.r > r) { // South
+                        current.walls.S = false;
+                        chosen.walls.N = false;
+                    } else if (chosen.c < c) { // West
+                        current.walls.W = false;
+                        chosen.walls.E = false;
+                    } else if (chosen.c > c) { // East
+                        current.walls.E = false;
+                        chosen.walls.W = false;
+                    }
+                    chosen.visited = true;
+                    stack.push(chosen);
+                }
+            }
+        }
+
+        // --- Drawing ---
+        function drawMaze() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#4b5563'; // gray-600
+            ctx.lineWidth = 2;
+
+            for (let r = 0; r < MAZE_SIZE; r++) {
+                for (let c = 0; c < MAZE_SIZE; c++) {
+                    let x = c * CELL_SIZE;
+                    let y = r * CELL_SIZE;
+                    if (grid[r][c].walls.N) {
+                        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + CELL_SIZE, y); ctx.stroke();
+                    }
+                    if (grid[r][c].walls.S) {
+                        ctx.beginPath(); ctx.moveTo(x, y + CELL_SIZE); ctx.lineTo(x + CELL_SIZE, y + CELL_SIZE); ctx.stroke();
+                    }
+                    if (grid[r][c].walls.E) {
+                        ctx.beginPath(); ctx.moveTo(x + CELL_SIZE, y); ctx.lineTo(x + CELL_SIZE, y + CELL_SIZE); ctx.stroke();
+                    }
+                    if (grid[r][c].walls.W) {
+                        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + CELL_SIZE); ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw Start and End
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.7)'; // Greenish
+            ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
+            ctx.fillStyle = 'rgba(244, 67, 54, 0.7)'; // Reddish
+            ctx.fillRect((MAZE_SIZE - 1) * CELL_SIZE, (MAZE_SIZE - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+
+        function drawPlayerPath() {
+            if (player.path.length === 0) return;
+            ctx.beginPath();
+            ctx.strokeStyle = '#6366f1'; // indigo-500
+            ctx.lineWidth = Math.max(1, CELL_SIZE / 5);
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            
+            const firstPos = player.path[0];
+            ctx.moveTo(firstPos.x * CELL_SIZE + CELL_SIZE / 2, firstPos.y * CELL_SIZE + CELL_SIZE / 2);
+
+            for (let i = 1; i < player.path.length; i++) {
+                const pos = player.path[i];
+                ctx.lineTo(pos.x * CELL_SIZE + CELL_SIZE / 2, pos.y * CELL_SIZE + CELL_SIZE / 2);
+            }
+            ctx.stroke();
+        }
+        
+        function drawPlayer() {
+            ctx.fillStyle = '#3b82f6'; // blue-500
+            ctx.beginPath();
+            ctx.arc(player.x * CELL_SIZE + CELL_SIZE / 2, player.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 3, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // --- Pi Logic ---
+        function generateActionMapping() {
+            actionMapping = {};
+            let digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+            // Shuffle digits (Fisher-Yates shuffle)
+            for (let i = digits.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [digits[i], digits[j]] = [digits[j], digits[i]];
+            }
+
+            mappingDisplay.innerHTML = ''; // Clear previous mapping
+
+            for (let i = 0; i < ACTION_NAMES.length; i++) {
+                const actionName = ACTION_NAMES[i];
+                const d1 = digits[i * 2];
+                const d2 = digits[i * 2 + 1];
+                actionMapping[d1] = ACTIONS[actionName];
+                actionMapping[d2] = ACTIONS[actionName];
+
+                const mapItem = document.createElement('div');
+                mapItem.className = 'mapping-item';
+                mapItem.innerHTML = `<span class="font-semibold">${actionName}:</span> ${d1}, ${d2}`;
+                mappingDisplay.appendChild(mapItem);
+            }
+        }
+
+        function updateUI() {
+            currentPiDigitEl.textContent = piIndex < PI_DIGITS_STR.length ? PI_DIGITS_STR[piIndex] : '-';
+            const currentDigit = PI_DIGITS_STR[piIndex];
+            currentActionEl.textContent = currentDigit ? ACTION_NAMES[actionMapping[currentDigit]] : '-';
+            digitsProcessedEl.textContent = piIndex;
+            playerPositionEl.textContent = `(${player.x}, ${player.y})`;
+
+            drawMaze(); // Redraw base maze
+            drawPlayerPath(); // Redraw path
+            drawPlayer(); // Redraw player on top
+        }
+        
+        function resetSimulationState() {
+            MAZE_SIZE = parseInt(mazeSizeSelect.value);
+            CELL_SIZE = canvas.width / MAZE_SIZE; // canvas.width is fixed, so cells get smaller for larger N
+            if (MAZE_SIZE > 20) CELL_SIZE = canvas.width / MAZE_SIZE; // Ensure it fits
+            
+            generateMaze();
+            generateActionMapping();
+            player = { x: 0, y: 0, path: [{x:0, y:0}] };
+            piIndex = 0;
+            statusMessageEl.textContent = 'Ready to start.';
+            statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-gray-700';
+            updateUI();
+            startButton.disabled = false;
+            startButton.textContent = 'Start Simulation';
+        }
+
+        function stepSimulation() {
+            if (piIndex >= PI_DIGITS_STR.length) {
+                statusMessageEl.textContent = 'Pi digits exhausted.';
+                statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-yellow-600';
+                stopSimulation();
+                return;
+            }
+
+            if (player.x === MAZE_SIZE - 1 && player.y === MAZE_SIZE - 1) {
+                statusMessageEl.textContent = `Exit found in ${piIndex} digits!`;
+                statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-green-600';
+                stopSimulation();
+                return;
+            }
+
+            const digit = PI_DIGITS_STR[piIndex];
+            const action = actionMapping[digit];
+            let moved = false;
+
+            const currentCell = grid[player.y][player.x]; // Note: grid is [row][col] so [y][x]
+
+            if (action === ACTIONS.UP && player.y > 0 && !currentCell.walls.N) {
+                player.y--;
+                moved = true;
+            } else if (action === ACTIONS.DOWN && player.y < MAZE_SIZE - 1 && !currentCell.walls.S) {
+                player.y++;
+                moved = true;
+            } else if (action === ACTIONS.LEFT && player.x > 0 && !currentCell.walls.W) {
+                player.x--;
+                moved = true;
+            } else if (action === ACTIONS.RIGHT && player.x < MAZE_SIZE - 1 && !currentCell.walls.E) {
+                player.x++;
+                moved = true;
+            }
+            // If action is STAY_PUT or move is blocked, player doesn't change position.
+
+            if(moved){
+                 player.path.push({x: player.x, y: player.y});
+            }
+
+            piIndex++;
+            updateUI();
+        }
+
+        function startSimulation() {
+            if (simulationRunning) return;
+            simulationRunning = true;
+            startButton.disabled = true;
+            startButton.textContent = 'Running...';
+            statusMessageEl.textContent = 'Simulation running...';
+            statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-blue-600';
+
+            const speed = parseInt(simulationSpeedSelect.value);
+            if (speed === 0) { // Instant mode
+                while(simulationRunning && piIndex < PI_DIGITS_STR.length && !(player.x === MAZE_SIZE - 1 && player.y === MAZE_SIZE - 1)) {
+                    stepSimulation(); // This will call stopSimulation internally if condition met
+                }
+                // If loop finished due to conditions other than stopSimulation, ensure UI is final
+                if (simulationRunning) { // if not already stopped by stepSimulation
+                    if (player.x === MAZE_SIZE - 1 && player.y === MAZE_SIZE - 1) {
+                         statusMessageEl.textContent = `Exit found in ${piIndex} digits! (Instant)`;
+                         statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-green-600';
+                    } else if (piIndex >= PI_DIGITS_STR.length) {
+                        statusMessageEl.textContent = 'Pi digits exhausted. (Instant)';
+                        statusMessageEl.className = 'status-message mt-4 text-center font-semibold text-lg text-yellow-600';
+                    }
+                    stopSimulation(); // ensure it's formally stopped
+                }
+            } else {
+                simulationInterval = setInterval(() => {
+                    if (!simulationRunning) { // Check if stopSimulation was called externally or by step
+                        clearInterval(simulationInterval);
+                        return;
+                    }
+                    stepSimulation();
+                }, speed);
+            }
+        }
+
+        function stopSimulation() {
+            simulationRunning = false;
+            clearInterval(simulationInterval);
+            startButton.disabled = false;
+            startButton.textContent = 'Start Simulation';
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', () => {
+            if (!simulationRunning) { // If starting fresh or after a stop
+                 resetSimulationState(); // Reset if it's a new start after previous run
+            }
+            startSimulation();
+        });
+        
+        resetButton.addEventListener('click', () => {
+            stopSimulation(); // Stop any ongoing simulation
+            resetSimulationState(); // Then reset everything for a new maze/mapping
+        });
+
+        mazeSizeSelect.addEventListener('change', () => {
+            if (!simulationRunning) {
+                resetSimulationState();
+            }
+        });
+        
+        // Initial setup
+        window.onload = () => {
+            resetSimulationState();
+        };
+
+    </script>
+</body>
+</html>
