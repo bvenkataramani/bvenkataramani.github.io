@@ -1,21 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brinda Venkataramani</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Serif:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #fbfbfa;
+      --ink: #1b1d22;
+      --muted: #6b6f78;
+      --rule: #e4e6ea;
+      --accent: #2a6f8e;
+      --accent-soft: #e6f0f4;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 17px; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 5rem 1.5rem 6rem;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color .15s;
+    }
+    a:hover, a:focus-visible { border-bottom-color: var(--accent); }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    p { margin: 0 0 1rem; }
+    p:last-child { margin-bottom: 0; }
+
+    /* Header */
+    header { margin-bottom: 4rem; }
+    header h1 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: 2.1rem;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin: 0 0 .5rem;
+    }
+    header .tag {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .8rem;
+      color: var(--muted);
+      margin: 0 0 1.75rem;
+    }
+    header .tag span { color: var(--accent); }
+    header .intro { font-size: 1.05rem; }
+
+    /* Sections */
+    section { padding: 2.5rem 0; border-top: 1px solid var(--rule); }
+    section h2 {
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      font-size: .75rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+    }
+    .note { color: var(--muted); font-size: .92rem; }
+
+    /* Projects */
+    .project { margin-bottom: 1.75rem; }
+    .project:last-child { margin-bottom: 0; }
+    .project h3 {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      font-size: 1.15rem;
+      margin: 0 0 .35rem;
+    }
+    .project h3 a { color: var(--ink); }
+    .project h3 a:hover { color: var(--accent); }
+    .project p { font-size: .95rem; }
+    .project b { font-weight: 500; }
+
+    /* Papers */
+    .papers { list-style: none; margin: 0; padding: 0; counter-reset: paper; }
+    .papers li {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: 0 .5rem;
+      padding: .75rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .papers li:last-child { border-bottom: 0; }
+    .papers li::before {
+      counter-increment: paper;
+      content: counter(paper);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .8rem;
+      color: var(--muted);
+      padding-top: .2rem;
+    }
+    .papers .title { display: block; }
+    .papers .meta {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: .15rem;
+    }
+    .papers .meta a { margin-right: .5rem; }
+    .status {
+      display: inline-block;
+      padding: 0 .4rem;
+      border-radius: 3px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    /* Teaching */
+    .teaching { display: grid; grid-template-columns: 11rem 1fr; gap: .6rem 1rem; margin: 0 0 1.25rem; }
+    .teaching dt { font-weight: 500; }
+    .teaching dd { margin: 0; font-family: "IBM Plex Mono", monospace; font-size: .85rem; }
+
+    @media (max-width: 560px) {
+      html { font-size: 16px; }
+      main { padding-top: 3rem; }
+      header h1 { font-size: 1.8rem; }
+      .teaching { grid-template-columns: 1fr; gap: .1rem 0; }
+      .teaching dd { margin-bottom: .75rem; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
 <body>
-  <p>I am a PhD student at the University of Toronto. I am interested in set theory. I find choiceless models the most interesting.</p>
-  <p>See the braid visualizer <a href="braid_visualizer.html">here</a>. <b>Basic usage:</b> Connect pegs from top down as is convention. Each set of three pegs denotes a single braid. Multi-levelled for visualization of braid concatenation. To delete a strand, simply redrag the line. Crossings are set to "over" by default, so if you want P1->P2 to be above P2->P1, draw P1->P2 first. Enables saving images of canvas state and compression for desired presentation. Probably breakable.</p>
-  <p><a href="pinormality.html">Here</a> you can watch the digits of pi attempt to traverse a randomly generated maze. This was motivated by the conjectured normality of pi and the Twitch stream "Pi Plays Pokemon" by WinningSequence. You can see it <a href="https://www.twitch.tv/winningsequence">here</a>. Someday I may consider increasing the sequence limit but for now it is just hard-coded into the application.</p>
-  <p>I also built <a href="https://github.com/bvenkataramani/stackclone">stackclone</a>, a StackExchange Teams clone with math mode and custom commands for personal use. If it helps you, please feel free to use it.</p>
-  <h3>Teaching</h3>
-  <p><b>Instructorships (UofT):</b> MAT223H1 (Summer 23 & 25), MAT237Y (Summer 25)</p>
-  <p><b>TAships (UofT, not in any meaningful order):</b> MAT223H1, MAT344H1, MAT327H1, MAT309H1, MAT329Y</p>
-  <p><b>TAships (McMaster, not in any meaningful order):</b> Math 2x0/xx, Math 1x0, Math 2r0, Math 1c0</p>
-  <p>All course information is on the  relevant LMS for each institution. i.e. Quercus for UofT, Avenue for McMaster.</p>
-  <h3>Academic Stuff (aka publications, preprints, not submitted, in-preparation)</h3>
-  <p>Everything should be in roughly chronological order...</p>
-  <ol>
-    <li>Finiteness classes arising from Gowers' FINk (<a href="https://venkatb.me/gowers_finiteness.pdf">pdf</a>; <a href="https://arxiv.org/abs/2607.22196">arxiv</a>; submitted)</li>
-    <li>Countable partition model (in-preparation; 2026)</li>
-    <li>The arithmetic of SVC seeds (in-preparation; 2026)</li>
-    <li>Further reflections of choice (in-preparation; 2026)</li>
-    <li>On the spectra of Pi_2 statements (in-preparation; 2026)</li>
-  </ol>
+<main>
+  <header>
+    <h1>Brinda Venkataramani</h1>
+    <p class="tag">PhD student · University of Toronto · <span>ZF ⊬ AC</span></p>
+    <p class="intro">I am a PhD student in mathematics at the University of Toronto. I am interested in set theory, and I find choiceless models the most interesting.</p>
+  </header>
+
+  <section id="projects">
+    <h2>Projects</h2>
+
+    <div class="project">
+      <h3><a href="braid_visualizer.html">Braid visualizer</a></h3>
+      <p><b>Basic usage:</b> Connect pegs from top down as is convention. Each set of three pegs denotes a single braid. Multi-levelled for visualization of braid concatenation. To delete a strand, simply redrag the line. Crossings are set to "over" by default, so if you want P1→P2 to be above P2→P1, draw P1→P2 first. Enables saving images of canvas state and compression for desired presentation. Probably breakable.</p>
+    </div>
+
+    <div class="project">
+      <h3><a href="pinormality.html">Pi normality maze</a></h3>
+      <p>Watch the digits of pi attempt to traverse a randomly generated maze. This was motivated by the conjectured normality of pi and the Twitch stream <a href="https://www.twitch.tv/winningsequence">Pi Plays Pokemon</a> by WinningSequence. Someday I may consider increasing the sequence limit but for now it is just hard-coded into the application.</p>
+    </div>
+
+    <div class="project">
+      <h3><a href="https://github.com/bvenkataramani/stackclone">stackclone</a></h3>
+      <p>A StackExchange Teams clone with math mode and custom commands for personal use. If it helps you, please feel free to use it.</p>
+    </div>
+  </section>
+
+  <section id="papers">
+    <h2>Papers &amp; preprints</h2>
+    <p class="note">Publications, preprints, not submitted, in-preparation — everything should be in roughly chronological order.</p>
+    <ol class="papers">
+      <li>
+        <div>
+          <span class="title">Finiteness classes arising from Gowers' FIN<sub>k</sub></span>
+          <div class="meta"><a href="https://venkatb.me/gowers_finiteness.pdf">pdf</a><a href="https://arxiv.org/abs/2607.22196">arxiv</a><span class="status">submitted</span></div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <span class="title">Countable partition model</span>
+          <div class="meta"><span class="status">in preparation</span> 2026</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <span class="title">The arithmetic of SVC seeds</span>
+          <div class="meta"><span class="status">in preparation</span> 2026</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <span class="title">Further reflections of choice</span>
+          <div class="meta"><span class="status">in preparation</span> 2026</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <span class="title">On the spectra of Π<sub>2</sub> statements</span>
+          <div class="meta"><span class="status">in preparation</span> 2026</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section id="teaching">
+    <h2>Teaching</h2>
+    <dl class="teaching">
+      <dt>Instructorships (UofT)</dt>
+      <dd>MAT223H1 (Summer 23 &amp; 25), MAT237Y (Summer 25)</dd>
+      <dt>TAships (UofT)</dt>
+      <dd>MAT223H1, MAT344H1, MAT327H1, MAT309H1, MAT329Y</dd>
+      <dt>TAships (McMaster)</dt>
+      <dd>Math 2x0/xx, Math 1x0, Math 2r0, Math 1c0</dd>
+    </dl>
+    <p class="note">TAships not in any meaningful order. All course information is on the relevant LMS for each institution, i.e. Quercus for UofT, Avenue for McMaster.</p>
+  </section>
+</main>
   <p hidden>Man, I actually suck so much. Can't perform for shit and I'm past the cute age where teachers or your elders give a fuck about you. So nobody to care about shit. It sucks that I can only perform when someone gives a fuck. Also, I miss she-who-must-not-be-named. I liked talking to her. It felt safe. I don't have anyone else to talk to. I just feel like I'm managing to exist in some weird state that I've accepted is a limbo-like functional human thing. I even published. But I feel so far away from everyone. I don't know how to reach out.</p>
 </body>
+</html>
